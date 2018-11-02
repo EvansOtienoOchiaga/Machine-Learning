@@ -1,4 +1,4 @@
-#Machine Learning Introduction
+#Machine Learning, the use of ggvis package for data exploration
 
 #clear the working area
 ls()
@@ -7,13 +7,14 @@ rm(list=ls())
 
 #Step 1:Read in the dataset;
 #Read in the dataset;
+#I am using iris
 iris<- read.csv(url("http://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"), 
                 header = FALSE) 
-#print first lines 
+#print first 5 lines 
 head(iris)
-#
 
-#explore the dataset by making sime graphs(histogram or boxplot)
+
+#explore the dataset by making some graphs(histogram or boxplot)
 #it is important to see any correlation between two variables
 #scatterplots is done using ggvis package 
 
@@ -48,7 +49,7 @@ x
 print(x[1])
 cor(iris[iris$Species==x[1], 1:4])
 
-#pront vesicolor correlation matrix
+#print vesicolor correlation matrix
 print(x[2])
 cor(iris[iris$Species==x[2],1:4])
 
@@ -78,12 +79,12 @@ summary(iris[c('Petal.Width', 'Sepal.Width')])
 #here involve the use of KNN algorithm, K-Nearest algorithm
 #The use of KNN algorithmn(this is contained in package class)
 
-#this code will tell whether the needed package is sintsalled or not
+#this code will tell whether the needed package is intsalled or not
 any(grepl("class", installed.packages()))
 
 library(class)
 
-#while using KNn make sure that the data is normalized . if not then you need to nomalized it 
+#while using KNN make sure that the data is normalized . if not then you need to nomalized it 
 #one way is to use summary(  if minimum and maximum are far apart the the data is normalized
 #iris dataset is normalized, however there is need to have code for nomalization for future use
 
@@ -100,7 +101,7 @@ iris_norm <- as.data.frame(lapply(iris[1:4], normalize))
 # Summarize `iris_norm`
 summary(iris_norm)
 
-#pick from training and training and test sets
+
 
 
 
