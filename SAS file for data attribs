@@ -1,0 +1,26 @@
+proc sort data=finals out=attrmap;
+ by  dissgp usubjid;
+run;
+
+data attrmap;
+length value $19 linecolor markersymbol markercolor $15;
+set attrmap(keep=usubjid dissgp);
+by dissgp usubjid;
+if first.usubjid;
+linepattern=1;
+if dissgp='Late Infantile' then do;
+   value='Late Infantile';
+   linecolor='blue';
+   markersymbol='X';
+   markercolor='blue';
+end;
+else if dissgp='Early Juvenile' then do;
+  value='Early Juvenile';
+  linecolor='blue';
+  markersymbol='circle';
+  markercolor='blue';
+end;
+id='dissgp';
+drop value;
+rename usubjid=value;
+run;
