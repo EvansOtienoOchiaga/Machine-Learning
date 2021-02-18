@@ -1,0 +1,7 @@
+*OTL-200 subjects are aval1;
+series x=&agevar y=aval1 / group = usubjid markers attrid = dissgp name ="dissgp";
+
+*define legends for OTL-200 plots;
+legenditem type=markerline name='s1' / label="OTL-200  LI (n/N=&litn2/&bign2)" lineattrs=(pattern=1 color=blue) markerattrs=(symbol=X color=blue);
+ legenditem type=markerline name='s2' / label="OTL-200  EJ (n/N=&litn1/&bign1)" lineattrs=(pattern=1 color=blue) markerattrs=(symbol=circle color=blue);
+            
