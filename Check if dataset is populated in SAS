@@ -1,0 +1,19 @@
+*count observations in data, if not empty then run macro;
+proc sql noprint;
+  select count(*) into :noobs1 from qc_pd143 ;
+quit;
+%put &noobs1;
+
+%if &noobs1 eq 0 %then %do;
+    *** create No data to available to report text ***;
+   data qc_pd143;
+     length col1 $200;
+     col1 ='No data available for the report';
+   run;
+%end;
+
+%else %do;
+  data qc_pd143(keep=col:);
+    set qc_pd143;
+  run;
+%end;
