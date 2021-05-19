@@ -1,0 +1,436 @@
+
+
+%macro f_lage(prognam=,pop=allfl,parcd=,parcd2=, npars=, dom=, ylab=,subvar=, subtitle=, subvarlbl=, nsubvar=,subprog=);
+*Get data for otl and nh series and scatter;
+*creating symptomatic stage subgroup variable ADFT;
+%if &subprog.="N" %then %do;
+data adft1(where=(&subvar ne "") drop= sympstg2);
+  set adam.adft(keep = usubjid allfl  trt: dissgp dissgpcd dissgpn sympstg2 avisit: 
+                        anl01fl ftstat aage: aval param:
+                 where =(paramcd in (&parcd.) and &pop='Y' and avisitn ne 34));
+  if (trta="OTL-200" and sympstg2="Pre-Symptomatic" and dissgp eq "Late Infantile") or (trta="Natural History" and dissgp="Late Infantile") then do;
+    sympstg="Pre-Symptomatic Late Infantile";
+    sympstgn=1;
+    sympstgcd="Pre-Symp LI";
+    %if "&subvar" = "sympstg" %then %do; output; %end;
+  
+  end;
+  if (trta="OTL-200" and sympstg2="Pre-Symptomatic" and dissgp eq "Early Juvenile") or  (trta="Natural History" and dissgp="Early Juvenile") then do;
+    sympstg="Pre-Symptomatic Early Juvenile";
+    sympstgn=2;
+    
+    sympstgcd="Pre-Symp EJ";
+    %if "&subvar" = "sympstg" %then %do; output; %end;
+  
+  end;
+  if (trta="OTL-200" and sympstg2="Symptomatic" and dissgp="Early Juvenile") or  (trta="Natural History" and dissgp="Early Juvenile") then do;
+    sympstg="Symptomatic Early Juvenile";
+    sympstgn=3;
+    sympstgcd="Symp EJ";
+    %if "&subvar" = "sympstg" %then %do; output; %end;
+  
+  end;
+run;
+%end;
+
+%else %if &subprog.="Y" %then %do;
+data adft1(where=(&subvar ne "") drop= sympstg2);
+  set adam.adft(keep = usubjid allfl msasfl trt: dissgp dissgpcd dissgpn sympstg2 MAS: avisit: 
+                        anl01fl ftstat aage: aval param:
+                 where =(paramcd in (&parcd.) and &pop='Y'
+                         and avisitn ne 34));
+  if (trta="OTL-200" and sympstg2="Pre-Symptomatic" and dissgp eq "Late Infantile") or (trta="Natural History" and dissgp="Late Infantile") then do;
+    sympstg="Pre-Symptomatic Late Infantile";
+    sympstgn=1;
+    sympstgcd="Pre-Symp LI";
+    %if "&subvar" = "sympstg" %then %do; output; %end;
+  
+  end;
+  if (trta="OTL-200" and sympstg2="Pre-Symptomatic" and dissgp eq "Early Juvenile") or  (trta="Natural History" and dissgp="Early Juvenile") then do;
+    sympstg="Pre-Symptomatic Early Juvenile";
+    sympstgn=2;
+    
+    sympstgcd="Pre-Symp EJ";
+    %if "&subvar" = "sympstg" %then %do; output; %end;
+  
+  end;
+  if (trta="OTL-200" and sympstg2="Symptomatic" and dissgp="Early Juvenile") or  (trta="Natural History" and dissgp="Early Juvenile") then do;
+    sympstg="Symptomatic Early Juvenile";
+    sympstgn=3;
+    sympstgcd="Symp EJ";
+    %if "&subvar" = "sympstg" %then %do; output; %end;
+  
+  end;
+run;
+%end;
+
+proc sort data = adft1 out = adft1s;
+  by paramcd &subvar trtan;
+run;
+*==============================================================================================;
+*Separating aval values by treatment groups and creating varibles needed for the legend;
+*==============================================================================================;
+data adft2(keep = usubjid trt: aagem aagey aval: twoyr para: &subvar.: );
+  set adft1s;
+  by paramcd &subvar trtan;
+  *OTL subjects are aval1;
+  if trtan = 1 then do;
+    aval1 = aval;
+  if first.trtan then aval1b = aval;
+  else aval1b = .;
+  end;
+  
+
+  *two year post GT so OTL subjects;
+  if avisitn = 180 and trtan = 1 then twoyr = aval;
+
+  
+run;
+
+*===============================================================================;
+*Bringing in data from healthy subjects;
+*===============================================================================;
+data ref (keep = aagey aval aagem param paramcd gmfmscale);
+  set raw.ref1 (where=(paramcd in (&parcd.) and ANL01FL="Y" ));
+  * need on a scale of 0-1 to fit beta model;
+  gmfmscale=aval/100;
+  if gmfmscale=1 then gmfmscale=0.9999;
+  if gmfmscale=0 then gmfmscale=0.0001;
+* create same variables as in the AD domains;
+  aagem=agemonth;
+  aagey =agemonth/12;
+run;
+proc sort data = ref out=refs;by param paramcd;run;
+
+*QC code calls proc mcmc separately for each param rather than using by statement;
+* update code to ensure seed is same for each paramcd;
+%do mc = 1 %to &npars.;
+
+*====================================================================================;
+* chain 1;
+* non-linear Bayesian model;
+*====================================================================================;
+proc mcmc data=refs (where= (paramcd=%scan(&parcd2,&mc,!))) plots=none seed=2534 nmc=100000 thin=20 nbi=1000 outpost=op1&mc. stats=(summary);
+  by  param paramcd;
+
+  parms a1 0 a2 0;
+  parms b1 0 b2 0;
+
+  prior a:~normal(0,sd=100);
+  prior b:~normal(0,sd=100);
+
+  a=exp(a1+a2*sqrt(aagem));
+  b=exp(b1+b2*sqrt(aagem));
+
+  model gmfmscale~beta(a,b);
+  ods output postsummaries=postsumm_1;
+run;
+
+*========================================================================================;
+* chain 2;
+* non-linear Bayesian model;
+*=========================================================================================;
+proc mcmc data=refs (where= (paramcd=%scan(&parcd2,&mc,!))) plots=none seed=2534 nmc=100000 thin=20 nbi=1000 outpost=op2&mc. stats=(summary);
+  by  param paramcd;
+
+  parms a1 1 a2 1;
+  parms b1 -1 b2 -1;
+
+  prior a:~normal(0,sd=100);
+  prior b:~normal(0,sd=100);
+
+  a=exp(a1+a2*sqrt(aagem));
+  b=exp(b1+b2*sqrt(aagem));
+
+  model gmfmscale~beta(a,b);
+  ods output postsummaries=postsumm_2;
+
+run;
+
+data op;
+  set %if &mc ne 1 %then %do; op %end; op1&mc. op2&mc.;
+run;
+%end;
+
+proc sql;
+  create table postsumm2 as
+  select param, paramcd, avg(a1) as a1, avg(a2) as a2, avg(b1) as b1, avg(b2) as b2
+  from op
+  group by param, paramcd;
+quit;
+
+data pred_int;
+  set postsumm2;
+  by param paramcd;
+
+  * estimate the predictive interval for a range of ages ;
+  do i=0 to 75; 
+    aagem=i;
+    aagey=aagem/12;
+    a=exp(a1+a2*sqrt(aagem));
+    b=exp(b1+b2*sqrt(aagem));
+    * multiple by 100 to put back on the right scale ;
+    LCI=100*quantile('beta', 0.025, a, b);
+    MEDIAN=100*quantile('beta', 0.5, a, b);
+    * per SAP: Quantile may fail to calculate UCI when median >99.5%;
+    if median > 99.5 then UCI=100;
+    else UCI=100*quantile('beta', 0.975, a, b);
+    output;
+  end;
+run;
+
+data final;
+  set adft2 pred_int refs (rename=(aval=refdata));
+  attrib a1 label=""
+         a2 label="" 
+         b1 label="" 
+         b2 label="";
+  format a1 a2 b1 b2 ;
+  informat  a1 a2 b1 b2; 
+run;
+
+proc sort data=final out=finals (drop = a1 a2 b1 b2 i a b gmfmscale trtsdt trt01:);
+  by paramcd &subvar.n usubjid aagem aval:;
+run;
+
+*little and big n counts for legends - OTL-200 split by disease subtype;
+*create subject variable and sub1 that contains disease subtype;
+data adsl_sub;
+ set adam.adsl;
+  where allfl="Y";
+ length sub1 $100;
+  col1=strip(scan(usubjid,2,"."));
+  sub1=dissgp;
+run;
+
+*BigN counts for OTL-200  - use ADSL to get all subjects;
+proc sql noprint;
+   create table bign_count as
+   select sub1, count (distinct usubjid) as bign
+   from adsl_sub
+   group by sub1;
+quit;
+
+*Littlen counts for OTL-200 based on data available for plot;
+*add sub1 variable to qc_final to have disease subtype and symptomatic stage for n counts;
+data final_sub;
+ set finals;
+ length sub1 $100.;
+    if index(dissgp, "Late") then sub1="Late Infantile";
+    else if index(dissgp, "Early") then sub1="Early Juvenile";
+ run;
+
+
+proc sql noprint;
+   create table littlen_count as
+   select sub1, count (distinct usubjid) as n
+   from final_sub
+   group by sub1;
+quit;
+
+
+*create one dataset with all counts to merge onto final dataset;
+data n_count;
+  merge bign_count littlen_count ;
+  by sub1;
+  if not missing(sub1);
+run;
+
+proc sort data=final_sub out=final_s;
+ by sub1;
+run;
+
+data finals(rename=(n=smalln ));
+ attrib  dissgp label="Disease Subtype" length =$ 14;
+ merge final_s n_count;
+  by sub1;
+  dissgp=sub1;
+  drop sub1;
+run;
+
+proc sort data=finals;
+ by paramcd &subvar.n usubjid aagem aval:;
+run;
+
+*EO 19MAY2021: Update output dataset so that we have REF for each dissgpn;
+data liref ejref;
+  set finals;
+  where missing(dissgpn);
+run;
+
+data finals2;
+ set finals(where=(dissgpn ne .)) liref(in=a) ejref(in=b);
+ if a then dissgpn=1;
+ if b then dissgpn=2;
+run;
+
+proc sort data=finals2;
+ by paramcd &subvar.n usubjid aagem aval:;
+run;
+
+
+*Set reference data with ADFT;
+data finals3;
+  set finals2;
+  
+  *LI summarised in Months and EJ summarised in Years;
+  if dissgpn = 1 then plot_age=aagem;
+  else if  dissgpn = 2 then plot_age=aagey;
+  drop trtp trtpn;
+run;
+
+proc sort data=finals3 out=output.&prognam;
+ by paramcd &subvar.n usubjid  plot_age aval:;
+run;
+
+*Preparing ADSL for bigN;
+data adsl1(where = (&subvar ne ""));
+  set adam.adsl(where = (&pop='Y') );
+
+  if (trt01a="OTL-200" and sympstg2="Pre-Symptomatic" and dissgp eq "Late Infantile") or (trt01a="Natural History" and dissgp="Late Infantile") then do;
+    sympstg="Pre-Symptomatic Late Infantile";
+    sympstgn=1;
+    %if "&subvar" = "sympstg" %then %do;output; %end;
+  
+  end;
+  if (trt01a="OTL-200" and sympstg2="Pre-Symptomatic" and dissgp eq "Early Juvenile") or  (trt01a="Natural History" and dissgp="Early Juvenile") then do;
+    sympstg="Pre-Symptomatic Early Juvenile";
+    sympstgn=2;
+    %if "&subvar" = "sympstg" %then %do; output; %end;
+  
+  end;
+  if (trt01a="OTL-200" and sympstg2="Symptomatic" and dissgp="Early Juvenile") or  (trt01a="Natural History" and dissgp="Early Juvenile") then do;
+    sympstg="Symptomatic Early Juvenile";
+    sympstgn=3;
+    %if "&subvar" = "sympstg" %then %do; output; %end;
+  
+  end;
+run;
+
+
+
+%macro outplot(grp=, numsubj=, col=, lim=, max=, tit=);
+*define colors;
+*Eo 19MAY2021:Update colors to be done by subjects;
+data attrmap;
+    length colour symbol $20;
+    colour = "red";
+	symbol = "circle";
+    output;
+    colour = "blue";
+	symbol = "plus";
+    output;
+    colour = "green";
+	symbol = "diamond";
+    output;
+    colour = "orange";
+	symbol = "asterisk";
+    output;
+    colour = "purple";
+	symbol = "square";
+    output;
+    colour = "magenta";
+	symbol = "triangledown";
+    output;
+    colour = "cyan";
+	symbol = "triangleleft";
+    output;
+    colour = "maroon";
+	symbol = "triangleright";
+    output;
+    
+  run;
+  
+  *Check there are enough colours specified;
+  data _null_;
+    set attrmap end=last;
+	if last and _n_ lt &numsubj. then put "WAR" "NING: more colours and symbols need to be specified";
+  run;
+
+  *Create macro variable of the colours;
+  proc sql noprint;
+    select colour, symbol into: graphcol separated by ' ',
+                              : graphsym separated by ' '
+    from attrmap;
+  quit;
+
+  %put &graphcol. &graphsym.;
+
+  *check for missing value in the plots;
+  proc sql noprint;
+
+  *** is there any twoyr ? ***;
+  select sum(abs(twoyr))
+  into: twoyr  
+  from output.&prognam
+  where not missing(twoyr) and dissgpn = &grp.;
+  quit;
+
+
+
+    title6 justify=left "Disease Subtype: &tit.";
+    options nobyline;
+    proc sgplot data = output.&prognam(where=(dissgpn = &grp.));
+      styleattrs datacontrastcolors=(&graphcol.) datasymbols=(&graphsym.); 
+      by paramcd param dissgpn;
+
+
+      * healthy subjects;
+      band x=plot_age upper=UCI lower=LCI / fill lineattrs=(pattern=dot)   transparency=0.3 name="band"
+                                         legendlabel="Healthy Predicted Median and 95% CrI";
+      series x=plot_age y=median / lineattrs=(color=grey pattern=1);
+      scatter x=plot_age y=refdata / markerattrs=(color=grey) name='hs' legendlabel="Healthy Children Data [1]";
+
+      *OTL-200 subjects are aval1;
+   
+      series x=plot_age y=aval1 / group = usubjid markers  name ="dissgp";
+
+      
+      *two year post gt marker for OTL-200 subjects;
+     %if &twoyr.>0 %then %do;
+      scatter x=plot_age y = twoyr / markerattrs=(color=blue symbol=square) name="s4" 
+                                  legendlabel="2 Years Post GT";
+	 %end;
+   
+
+
+      yaxis label = "GMFM Total Score (%) Total Score (%)" values=(0 to 100 by 20) ;
+	  xaxis min=0 label="&col."  
+	    %if &lim. ne %then values=(&lim.) VALUESHINT;
+		%if &max. ne %then max=&max. VALUESHINT;
+    ;
+      
+
+     /*xaxis label = "&xlab" %if &j =1 %then %do; values = (0 to &xaxis. by 12) min=-0.5 max = &xmax. valueshint %if &xaxis gt 120 %then %do; ranges=(-0.5-134 167-180) %end; %end;
+                            %else %do; values = (0 to &xaxis. by 1) min=-0.083 max = &xmax. valueshint %end;;*/
+
+      keylegend "s4"  "hs" "band" "dissgp" / across=2;
+
+    run;
+%mend outplot;
+*Check Maximum for x axis and number of subjects in each group;
+proc sql noprint;
+  *LI;
+  select ceil(max(plot_age)/3)*3 into: li_xaxis
+  from output.eff301 (where=(not missing (aval) and dissgpn in (1)));
+  *EJ;
+  select ceil(max(plot_age)/1)*1 into: ej_xaxis
+  from output.eff301 (where=(not missing (aval) and dissgpn in (2)));
+
+  select count(distinct usubjid) into: li_subj
+  from output.eff301 (where=(not missing (usubjid) and dissgpn in (1)));
+
+  select count(distinct usubjid) into: ej_subj
+  from output.eff301 (where=(not missing (usubjid) and dissgpn in (2)));
+quit;
+
+
+
+%grstart_pdf;
+ods graphics on / reset=index  width=9 in height=4.2 in border=off noscale;
+%outplot(grp=1, numsubj=&li_subj, col=%str(Age in Months), lim=0 to &li_xaxis. by 3, max=&li_xaxis., tit=Late Infantile);
+%outplot(grp=2, numsubj=&ej_subj, col=%str(Age in Years), lim=0 to &ej_xaxis. by 1, max=&ej_xaxis., tit=Early Juvenile);
+
+%grstop_pdf;
+
+%mend f_lage;
